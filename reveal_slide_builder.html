@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reveal.js Slide Builder</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/theme/black.css" />
+  <style>
+    body { font-family: sans-serif; margin: 1em; }
+    .slide-form { margin-bottom: 2em; border: 1px solid #ccc; padding: 1em; border-radius: 5px; }
+    textarea, input[type="text"] { width: 100%; }
+    .preview-container { margin-top: 3em; border-top: 1px solid #ccc; padding-top: 2em; }
+    .reveal img { max-width: 80%; height: auto; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Reveal.js Slide Builder</h1>
+
+  <div id="forms"></div>
+  <button id="add-slide">Add Slide</button>
+  <button id="preview-slides">Preview Slides</button>
+  <button id="download-presentation">Download Presentation</button>
+
+  <div class="preview-container" id="preview-container"></div>
+
+  <script>
+    let slideIndex = 0;
+
+    function addSlide() {
+      const form = document.createElement('div');
+      form.className = 'slide-form';
+      form.innerHTML = `
+        <h3>Slide ${slideIndex + 1}</h3>
+        <label>Title:<br><input type="text" class="slide-title" /></label><br><br>
+        <label>Content:<br><textarea rows="4" class="slide-content"></textarea></label><br><br>
+        <label>Image:<br><input type="file" accept="image/*" class="slide-image" /></label><br><br>
+      `;
+      document.getElementById('forms').appendChild(form);
+      slideIndex++;
+    }
+
+    function previewSlides() {
+      const preview = document.getElementById('preview-container');
+      preview.innerHTML = `
+        <div class="reveal">
+          <div class="slides" id="slides-output"></div>
+        </div>
+      `;
+
+      const output = document.getElementById('slides-output');
+      const forms = document.querySelectorAll('.slide-form');
+      let pending = forms.length;
+
+      if (pending === 0) {
+        initReveal();
+        return;
+      }
+
+      forms.forEach(form => {
+        const title = form.querySelector('.slide-title').value;
+        const content = form.querySelector('.slide-content').value;
+        const fileInput = form.querySelector('.slide-image');
+        const file = fileInput.files[0];
+        const section = document.createElement('section');
+        const baseHTML = `<h2>${title}</h2><p>${content}</p>`;
+
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            section.innerHTML = baseHTML + `<img src="${e.target.result}" />`;
+            output.appendChild(section);
+            if (--pending === 0) initReveal();
+          };
+          reader.readAsDataURL(file);
+        } else {
+          section.innerHTML = baseHTML;
+          output.appendChild(section);
+          if (--pending === 0) initReveal();
+        }
+      });
+    }
+
+    function downloadPresentation() {
+      const forms = document.querySelectorAll('.slide-form');
+
+      const slidePromises = Array.from(forms).map(form => {
+        const title = form.querySelector('.slide-title').value;
+        const content = form.querySelector('.slide-content').value;
+        const fileInput = form.querySelector('.slide-image');
+        const file = fileInput.files[0];
+        const baseHTML = `<section><h2>${title}</h2><p>${content}</p>`;
+
+        if (file) {
+          return new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = e => {
+              resolve(`${baseHTML}<img src="${e.target.result}" /></section>`);
+            };
+            reader.readAsDataURL(file);
+          });
+        } else {
+          return Promise.resolve(`${baseHTML}</section>`);
+        }
+      });
+
+      Promise.all(slidePromises).then(sections => {
+        const docStart = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Reveal.js Presentation</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/theme/black.css" />
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+`;
+
+        const docEnd = `
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.js"><\/script>
+  <script>
+    function initReveal() {
+      if (window.Reveal) {
+        Reveal.initialize({ hash: true });
+      } else {
+        setTimeout(initReveal, 100);
+      }
+    }
+    initReveal();
+  <\/script>
+</body>
+</html>`;
+
+        const blob = new Blob([docStart + sections.join("\n") + docEnd], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'presentation.html';
+        a.click();
+      });
+    }
+
+    function initReveal() {
+      if (window.Reveal) {
+        Reveal.initialize({ hash: true });
+      } else {
+        setTimeout(initReveal, 100);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('add-slide').addEventListener('click', addSlide);
+      document.getElementById('preview-slides').addEventListener('click', previewSlides);
+      document.getElementById('download-presentation').addEventListener('click', downloadPresentation);
+      addSlide();
+    });
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.js"></script>
+</body>
+</html>
